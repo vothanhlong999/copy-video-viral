@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { analyzeVideo } from './geminiService';
 import { SceneJson, BulkVideoItem } from './types';
-import { LicenseGate } from './LicenseGate';
+import { LicenseGate } from './LicenseGate'; // Bổ sung dòng này
 
 declare global {
   interface Window {
@@ -57,8 +57,7 @@ const Header: React.FC<{ onSelectKey: () => void }> = ({ onSelectKey }) => (
   </header>
 );
 
-// --- PHẦN NỘI DUNG CHÍNH CỦA APP ---
-function MainAppContent() {
+export default function App() {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -99,7 +98,7 @@ function MainAppContent() {
 
   const [mergeFiles, setMergeFiles] = useState<File[]>([]);
   const [mergeOutputName, setMergeOutputName] = useState("merged_prompts");
-  const [mergeLimit, setMergeLimit] = useState(1000000); 
+  const [mergeLimit, setMergeLimit] = useState(1000000);
 
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const currentStyle = isCustomStyle ? customStyleText : selectedStyle;
@@ -164,133 +163,158 @@ function MainAppContent() {
     setIsBulkProcessing(false);
   };
 
+  const downloadAllBulk = () => {
+    bulkItems.filter(it => it.status === 'completed').forEach(item => {
+      downloadItem(item.file.name, item.scenes);
+    });
+  };
+
+  const removeBulkItem = (id: string) => {
+    setBulkItems(prev => prev.filter(it => it.id !== id));
+  };
+
+  const removeMergeFile = (index: number) => {
+    setMergeFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleConvertToCsv = async () => {
+    if (mergeFiles.length === 0) return;
+    const csvRows = ['"FileName","Content"'];
+    const escapeCsv = (str: string) => `"${str.replace(/"/g, '""')}"`;
+    for (const file of mergeFiles) {
+      const text = await file.text();
+      csvRows.push(`${escapeCsv(file.name)},${escapeCsv(text)}`);
+    }
+    const blob = new Blob(["\uFEFF", csvRows.join("\r\n")], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `${mergeOutputName || 'prompts'}.csv`; a.click();
+    URL.revokeObjectURL(url);
+    alert("Thành công!");
+  };
+
+  const handleMergeFiles = async () => {
+    if (mergeFiles.length === 0) return;
+    let content = "";
+    for (const file of mergeFiles) {
+      const text = await file.text();
+      content += (content === "" ? "" : "\n\n") + text;
+    }
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `${mergeOutputName}.txt`; a.click();
+    URL.revokeObjectURL(url);
+    alert("Thành công!");
+  };
+
   const startAnalysis = async () => {
     if (!file || (isCustomStyle && !customStyleText)) return;
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     try {
       const result = await analyzeVideo(file, currentStyle, selectedModel, 0);
       setScenes(result.scenes);
       downloadItem(file.name, result.scenes);
     } catch (err: any) {
-      setError("Lỗi xử lý video. Vui lòng kiểm tra lại file.");
+      setError("Lỗi xử lý video.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleMergeFiles = async () => {
-    if (mergeFiles.length === 0) return;
-    let currentFileContent = "";
-    let fileIndex = 1;
-    for (const file of mergeFiles) {
-      const text = await file.text();
-      currentFileContent += (currentFileContent ? "\n\n" : "") + text;
+  const continueAnalysis = async () => {
+    if (!file || scenes.length === 0) return;
+    setContinuing(true);
+    try {
+      const lastId = parseInt(scenes[scenes.length - 1].scene_id);
+      const result = await analyzeVideo(file, currentStyle, selectedModel, isNaN(lastId) ? scenes.length : lastId);
+      if (result.scenes.length > 0) setScenes(prev => [...prev, ...result.scenes]);
+    } finally {
+      setContinuing(false);
     }
-    const blob = new Blob([currentFileContent], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${mergeOutputName}.txt`;
-    a.click();
-    alert("Gộp thành công!");
   };
 
-  if (hasApiKey === null) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-slate-800 border-t-indigo-500 rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
-  if (hasApiKey === false) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-slate-200 p-6">
-        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl text-center space-y-6">
-          <h1 className="text-2xl font-black text-white uppercase tracking-tighter">Cấu hình API Key</h1>
-          <p className="text-sm text-slate-400">Chọn API Key từ AI Studio để sử dụng Gemini 3.</p>
-          <button onClick={handleSelectKey} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-indigo-500 transition-all">
-            Chọn API Key
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-200">
-      <Header onSelectKey={handleSelectKey} />
-      <main className="flex-grow max-w-7xl mx-auto w-full px-6 py-8">
-        
-        {/* MODE TABS */}
-        <div className="flex justify-center mb-8">
-          <div className="bg-slate-900 p-1 rounded-2xl border border-slate-800 flex flex-wrap justify-center gap-1">
-            <button onClick={() => { setIsBulkMode(false); setIsMergeMode(false); setIsCsvMode(false); }} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${(!isBulkMode && !isMergeMode && !isCsvMode) ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>Single Clone</button>
-            <button onClick={() => { setIsBulkMode(true); setIsMergeMode(false); setIsCsvMode(false); }} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${(isBulkMode) ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>Bulk Prompt Clone</button>
-            <button onClick={() => { setIsBulkMode(false); setIsMergeMode(true); setIsCsvMode(false); }} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${(isMergeMode) ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>Merge TXT</button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* CỘT TRÁI - CONTROLS */}
-          <div className="lg:col-span-4 space-y-6">
-            <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-2xl space-y-6">
-              <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
-                { (isMergeMode || isCsvMode) ? "File TXT" : "Nguồn Video" }
-              </h2>
-              <div className="relative group border-2 border-dashed border-slate-800 rounded-2xl p-6 text-center hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all cursor-pointer">
-                <input type="file" multiple={isBulkMode || isMergeMode} accept={isMergeMode ? ".txt" : "video/*"} onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
-                <p className="text-[10px] font-bold text-slate-500 uppercase">{file || mergeFiles.length > 0 ? "Đã chọn file" : "Nhấp để chọn file"}</p>
-              </div>
-
-              { !isMergeMode && (
-                <div className="space-y-4">
-                  <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs font-bold text-slate-300 focus:border-indigo-500 outline-none">
-                    {MODELS.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                  </select>
-                  <select value={selectedStyle} onChange={(e) => setSelectedStyle(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs font-bold text-slate-300 focus:border-indigo-500 outline-none">
-                    {STYLES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-              )}
-
-              <button onClick={isMergeMode ? handleMergeFiles : (isBulkMode ? startBulkAnalysis : startAnalysis)} disabled={loading || isBulkProcessing} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-500 shadow-xl shadow-indigo-600/20 transition-all">
-                {loading || isBulkProcessing ? "Đang xử lý..." : "Bắt đầu"}
-              </button>
-            </div>
-          </div>
-
-          {/* CỘT PHẢI - RESULTS */}
-          <div className="lg:col-span-8">
-            <div className="bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl flex flex-col h-full min-h-[500px] overflow-hidden">
-               <div className="px-6 py-4 border-b border-slate-800 bg-slate-900/50 flex justify-between items-center">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dữ liệu kết quả</span>
-                  {scenes.length > 0 && <button onClick={() => { textAreaRef.current?.select(); document.execCommand('copy'); alert('Copied!'); }} className="text-[10px] font-bold text-indigo-400 hover:text-white">Copy JSON</button>}
-               </div>
-               <div className="flex-grow p-6">
-                 {scenes.length > 0 ? (
-                   <textarea ref={textAreaRef} readOnly value={formattedText} className="w-full h-full bg-slate-950 border border-slate-800 rounded-2xl p-6 font-mono text-[11px] text-indigo-300 outline-none resize-none leading-relaxed" />
-                 ) : (
-                   <div className="h-full flex flex-col items-center justify-center text-slate-700 opacity-20">
-                      <p className="text-[10px] font-black uppercase tracking-[0.5em]">Waiting for Data</p>
-                   </div>
-                 )}
-               </div>
-            </div>
-          </div>
-        </div>
-      </main>
-    </div>
-  );
-}
-
-// KHÓA TOÀN BỘ APP BẰNG LICENSE GATE
-export default function App() {
+  // --- PHẦN QUAN TRỌNG: BAO BỌC LICENSEGATE ---
   return (
     <LicenseGate>
-      <MainAppContent />
+      <div className="min-h-screen flex flex-col bg-slate-950 text-slate-200">
+        <Header onSelectKey={handleSelectKey} />
+        
+        {hasApiKey === false ? (
+          <div className="flex-grow flex flex-col items-center justify-center p-6">
+             <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 text-center space-y-6">
+                <h1 className="text-2xl font-black text-white uppercase tracking-tighter">Cấu hình API Key</h1>
+                <p className="text-sm text-slate-400">Bạn cần chọn một API Key để sử dụng.</p>
+                <button onClick={handleSelectKey} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest">Chọn API Key</button>
+             </div>
+          </div>
+        ) : hasApiKey === null ? (
+          <div className="flex-grow flex items-center justify-center">
+            <div className="w-8 h-8 border-4 border-slate-800 border-t-indigo-500 rounded-full animate-spin"></div>
+          </div>
+        ) : (
+          <main className="flex-grow max-w-7xl mx-auto w-full px-6 py-8">
+            <div className="flex justify-center mb-8">
+              <div className="bg-slate-900 p-1 rounded-2xl border border-slate-800 flex flex-wrap justify-center gap-1">
+                <button onClick={() => { setIsBulkMode(false); setIsMergeMode(false); setIsCsvMode(false); }} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${(!isBulkMode && !isMergeMode && !isCsvMode) ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>Single Clone</button>
+                <button onClick={() => { setIsBulkMode(true); setIsMergeMode(false); setIsCsvMode(false); }} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${(isBulkMode && !isMergeMode && !isCsvMode) ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>Bulk Prompt Clone</button>
+                <button onClick={() => { setIsBulkMode(false); setIsMergeMode(true); setIsCsvMode(false); }} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${(isMergeMode && !isCsvMode) ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>Merge TXT</button>
+                <button onClick={() => { setIsBulkMode(false); setIsMergeMode(false); setIsCsvMode(true); }} className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isCsvMode ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>TXT to CSV</button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              <div className="lg:col-span-4 space-y-6">
+                <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-2xl space-y-6">
+                  <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                    {(isMergeMode || isCsvMode) ? "Nguồn File TXT" : "Nguồn Video"}
+                  </h2>
+                  <div className="relative group border-2 border-dashed border-slate-800 rounded-2xl p-6 text-center hover:border-indigo-500/50 hover:bg-indigo-500/5 cursor-pointer">
+                    <input type="file" multiple={isBulkMode || isMergeMode || isCsvMode} accept={isMergeMode || isCsvMode ? ".txt" : "video/*"} onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
+                    <p className="text-[10px] font-bold text-slate-500 uppercase">{file || bulkItems.length > 0 || mergeFiles.length > 0 ? "Đã chọn file" : "Nhấp để chọn file"}</p>
+                  </div>
+                  
+                  {!(isMergeMode || isCsvMode) && (
+                    <div className="space-y-4">
+                      <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs font-bold text-slate-300 focus:border-indigo-500 outline-none transition-all">
+                        {MODELS.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                      </select>
+                      <select value={isCustomStyle ? "custom" : selectedStyle} onChange={(e) => e.target.value === "custom" ? setIsCustomStyle(true) : (setIsCustomStyle(false), setSelectedStyle(e.target.value))} className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs font-bold text-slate-300 focus:border-indigo-500 outline-none transition-all">
+                        {STYLES.map(s => <option key={s} value={s}>{s}</option>)}
+                        <option value="custom">Tùy chỉnh phong cách...</option>
+                      </select>
+                    </div>
+                  )}
+
+                  <button onClick={isCsvMode ? handleConvertToCsv : (isMergeMode ? handleMergeFiles : (isBulkMode ? startBulkAnalysis : startAnalysis))} disabled={loading || isBulkProcessing} className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-500 shadow-xl transition-all">
+                    {loading || isBulkProcessing ? "Đang xử lý..." : "Bắt đầu"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="lg:col-span-8 flex flex-col">
+                <div className="bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl flex flex-col h-full min-h-[600px] overflow-hidden">
+                  <div className="px-6 py-4 border-b border-slate-800 flex justify-between items-center">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dữ liệu kết quả</span>
+                  </div>
+                  <div className="flex-grow p-6">
+                    {scenes.length > 0 ? (
+                      <textarea ref={textAreaRef} readOnly value={formattedText} className="w-full h-full bg-slate-950 border border-slate-800 rounded-2xl p-6 font-mono text-[11px] text-indigo-300 outline-none resize-none leading-relaxed" />
+                    ) : (
+                      <div className="h-full flex items-center justify-center text-slate-700 opacity-20 uppercase font-black text-[10px] tracking-widest">Sẵn sàng phân tích dữ liệu</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </main>
+        )}
+
+        <footer className="py-6 text-center border-t border-slate-900 bg-slate-950">
+          <p className="text-[9px] font-black text-slate-700 uppercase tracking-[0.4em]">Engineered for Content Re-creation • Private Environment</p>
+        </footer>
+      </div>
     </LicenseGate>
   );
 }
