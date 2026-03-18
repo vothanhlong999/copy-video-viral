@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { analyzeVideo } from './geminiService';
 import { SceneJson, BulkVideoItem } from './types';
+import { LicenseGate } from './LicenseGate';
 
 declare global {
   interface Window {
@@ -333,6 +334,7 @@ export default function App() {
 
   if (hasApiKey === false) {
     return (
+      <LicenseGate>
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-slate-200 p-6">
         <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl text-center space-y-6">
           <div className="bg-indigo-500/10 w-20 h-20 rounded-full flex items-center justify-center mx-auto border border-indigo-500/20">
@@ -771,5 +773,6 @@ export default function App() {
         <p className="text-[9px] font-black text-slate-700 uppercase tracking-[0.4em]">Engineered for Content Re-creation • Private Environment</p>
       </footer>
     </div>
+        </LicenseGate>
   );
 }
