@@ -17,7 +17,7 @@ export const LicenseGate = ({ children }: { children: React.ReactNode }) => {
     setLoading(true);
     
     // THAY URL NÀY BẰNG URL APPS SCRIPT CỦA BẠN (Ảnh 2 bạn gửi)
-    const scriptUrl = "https://script.google.com/macros/s/AKfycb.../exec"; 
+    const scriptUrl = "https://script.google.com/macros/s/AKfycbxqDg8A4uPhNlXRqV_lhOGlEKeElSQS2LF4f6HvGXzZ_S1FiS8_UY1BKSfE195nnv6BPw/exec"; 
     const deviceId = window.navigator.userAgent + window.screen.width;
 
     try {
