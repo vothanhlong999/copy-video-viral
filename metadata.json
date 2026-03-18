@@ -1,0 +1,5 @@
+{
+  "name": "Remix: VIDEO TO PROMPT VEO3",
+  "description": "A professional tool that analyzes video content and generates detailed technical JSON prompts for AI video generation (Veo 3), following strict 8-second segmentation and character/background consistency rules.",
+  "requestFramePermissions": []
+}
