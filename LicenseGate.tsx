@@ -60,6 +60,30 @@ export const LicenseGate = ({ children }: { children: React.ReactNode }) => {
         >
           {loading ? "ĐANG KIỂM TRA..." : "KÍCH HOẠT NGAY"}
         </button>
+        {/* Thông báo hỗ trợ Zalo */}
+<div className="mt-8 pt-6 border-t border-slate-800 space-y-3 text-center">
+  <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest">Hỗ trợ kích hoạt</p>
+  
+  <div className="flex flex-col gap-2">
+    <a 
+      href="https://zalo.me/0888649819" 
+      target="_blank" 
+      rel="noopener noreferrer"
+      className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors font-medium"
+    >
+      📞 Liên hệ: <span className="font-black">0888649819</span> (Cô Thơm)
+    </a>
+    
+    <a 
+      href="https://zalo.me/g/pudpsm858" 
+      target="_blank" 
+      rel="noopener noreferrer"
+      className="inline-block px-4 py-2 bg-slate-800/50 hover:bg-indigo-500/10 border border-slate-700 hover:border-indigo-500/30 rounded-xl text-[10px] text-slate-300 transition-all"
+    >
+      💬 Group hỗ trợ: <span className="text-indigo-400 font-bold">[ 999 Tool ]</span>
+    </a>
+  </div>
+</div>
       </div>
     </div>
   );
